@@ -1,0 +1,10 @@
+{
+    "port": 8080,                     // Port for the proxy
+    "strategy": "round-robin",        // Load balancing method
+    "health_check_frequency": "30s",  // How often to check servers
+    "backends": [                     // List of backend servers
+        "http://localhost:8081",
+        "http://localhost:8082",
+        "http://localhost:8083"
+    ]
+}
