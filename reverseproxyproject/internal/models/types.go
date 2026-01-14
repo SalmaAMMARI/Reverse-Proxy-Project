@@ -66,18 +66,19 @@ func (sp *ServerPool) AddBackend(backend *Backend) {
     defer sp.mu.Unlock()
     sp.Backends = append(sp.Backends, backend)
 }
-
-func (sp *ServerPool) RemoveBackend(targetURL *url.URL) {
+func (sp *ServerPool) RemoveBackend(targetURL *url.URL) bool{
     sp.mu.Lock()
     defer sp.mu.Unlock()
     
     for i, backend := range sp.Backends {
         if backend.URL.String() == targetURL.String() {
             sp.Backends = append(sp.Backends[:i], sp.Backends[i+1:]...)
-            return
+            return true
         }
     }
+    return false 
 }
+
 //Get all the backend s of the server Pool
 func (sp *ServerPool) GetBackends() []*Backend {
     sp.mu.RLock()

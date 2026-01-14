@@ -24,10 +24,8 @@ func (rr *RoundRobinBalancer) GetPool() *models.ServerPool {
 	return rr.pool
 }
 func (rr *RoundRobinBalancer) RemoveBackend(backendUrl *url.URL) bool {
-    if rr.pool.RemoveBackend(backendUrl){
-		return true 
-	}
-	return false
+    return  rr.pool.RemoveBackend(backendUrl)
+	
 }
 
 // GetNextValidPeer returns the next alive backend using round-robin algorithm
