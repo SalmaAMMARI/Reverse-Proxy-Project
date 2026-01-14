@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sync/atomic"
 	"time"
-	"reverse-proxy-project/internal/models" 
+	"reverseproxyproject/internal/models" 
 )
 
 // RoundRobinBalancer implements the LoadBalancer interface with round-robin strategy
@@ -24,7 +24,10 @@ func (rr *RoundRobinBalancer) GetPool() *models.ServerPool {
 	return rr.pool
 }
 func (rr *RoundRobinBalancer) RemoveBackend(backendUrl *url.URL) bool {
-    return rr.pool.RemoveBackend(backendUrl)
+    if rr.pool.RemoveBackend(backendUrl){
+		return true 
+	}
+	return false
 }
 
 // GetNextValidPeer returns the next alive backend using round-robin algorithm

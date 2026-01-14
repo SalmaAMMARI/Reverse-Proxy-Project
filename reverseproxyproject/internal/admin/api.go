@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"reverse-proxy-project/internal/models"
-	"reverse-proxy-project/internal/proxy"
+	"reverseproxyproject/internal/models"
+	"reverseproxyproject/internal/Proxy"
 )
 
 // AdminAPI handles the administrative interface

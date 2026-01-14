@@ -2,15 +2,15 @@
 package proxy
 
 import (
-	"context"
+	
 	"fmt"
 	"log"
+	"encoding/json"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"time"
-	"reverse-proxy-project/Config"
-	"reverse-proxy-project/internal/models"
+	"reverseproxyproject/Config"
+	"reverseproxyproject/internal/models"
 )
 
 // ProxyHandler handles incoming HTTP requests and forwards them to backends

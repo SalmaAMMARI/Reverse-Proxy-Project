@@ -5,10 +5,10 @@ import (
 	"net/url"
 	"time"
 
-	"reverse-proxy-project/Config"
-	"reverse-proxy-project/internal/admin"
-	"reverse-proxy-project/internal/models"
-	"reverse-proxy-project/internal/proxy"
+	"reverseproxyproject/Config"
+	"reverseproxyproject/internal/admin"
+	"reverseproxyproject/internal/models"
+	"reverseproxyproject/internal/Proxy"
 )
 
 func main() {

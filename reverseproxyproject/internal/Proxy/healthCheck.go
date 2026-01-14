@@ -1,10 +1,9 @@
 package proxy
 
 import (
-	"fmt"
 	"log"
 	"time"
-	"reverse-proxy-project/internal/models"
+	"reverseproxyproject/internal/models"
 )
 
 // HealthChecker runs periodic health checks on backends
