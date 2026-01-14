@@ -20,6 +20,12 @@ func NewRoundRobinBalancer(pool *models.ServerPool) *RoundRobinBalancer {
 		pool: pool,
 	}
 }
+func (rr *RoundRobinBalancer) GetPool() *models.ServerPool {
+	return rr.pool
+}
+func (rr *RoundRobinBalancer) RemoveBackend(backendUrl *url.URL) bool {
+    return rr.pool.RemoveBackend(backendUrl)
+}
 
 // GetNextValidPeer returns the next alive backend using round-robin algorithm
 func (rr *RoundRobinBalancer) GetNextValidPeer() *models.Backend {
@@ -106,6 +112,7 @@ func (rr *RoundRobinBalancer) HealthCheck(backend *models.Backend) {
 	
 	rr.SetBackendStatus(backend.URL, isAlive)
 }
+
 
 // GetStatus returns current load balancer status for monitoring
 func (rr *RoundRobinBalancer) GetStatus() map[string]interface{} {
