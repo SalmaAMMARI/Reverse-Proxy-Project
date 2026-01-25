@@ -5,10 +5,10 @@ import (
 	"net/url"
 	"time"
 
-	"reverseproxyproject/Config"
-	"reverseproxyproject/internal/admin"
+	config "reverseproxyproject/Config"
+	admin "reverseproxyproject/internal/admin"
 	"reverseproxyproject/internal/models"
-	"reverseproxyproject/internal/Proxy"
+	proxy "reverseproxyproject/internal/Proxy"
 )
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 	go healthChecker.Start()
 
 	// Start proxy server
-	go proxy.StartProxyServer(cfg, pool)
+	go proxy.StartProxyServer(cfg, balancer)
 
 	// Create and start admin API
 	adminAPI := admin.NewAdminAPI(balancer, healthChecker, 8081)

@@ -1,0 +1,94 @@
+2026/01/25 00:17:48 Admin API starting on port 8081
+2026/01/25 00:17:48 Endpoints:
+2026/01/25 00:17:48 GET  :8081/status
+2026/01/25 00:17:48 GET  :8081/health
+2026/01/25 00:17:48 POST :8081/backends - Add backend
+2026/01/25 00:17:48  Health checker starting (checking every 10s)
+2026/01/25 00:17:48 DELETE :8081/backends - Remove backend
+2026/01/25 00:17:48  Reverse Proxy starting on :8080
+2026/01/25 00:17:48 Strategy: round-robin
+2026/01/25 00:17:48  Backends: 3
+2026/01/25 00:17:48 Ready to forward requests!
+2026/01/25 00:17:48 ------------------------------------------
+2026/01/25 00:17:53  [GET] / [::1]:36102
+2026/01/25 00:17:53  Forwarding to: http://localhost:8082
+2026/01/25 00:17:53   Forwarding: GET http://localhost:8082/
+2026/01/25 00:17:53   Response from http://localhost:8082: 200 (1.58987ms)
+2026/01/25 00:17:53  [GET] / [::1]:36110
+2026/01/25 00:17:53  Forwarding to: http://localhost:8083
+2026/01/25 00:17:53   Forwarding: GET http://localhost:8083/
+2026/01/25 00:17:53   Response from http://localhost:8083: 200 (1.111562ms)
+2026/01/25 00:17:53  [GET] / [::1]:36116
+2026/01/25 00:17:53  Forwarding to: http://localhost:8084
+2026/01/25 00:17:53   Forwarding: GET http://localhost:8084/
+2026/01/25 00:17:53   Response from http://localhost:8084: 200 (830.072µs)
+2026/01/25 00:17:54  [GET] / [::1]:36120
+2026/01/25 00:17:54  Forwarding to: http://localhost:8082
+2026/01/25 00:17:54   Forwarding: GET http://localhost:8082/
+2026/01/25 00:17:54   Response from http://localhost:8082: 200 (1.210759ms)
+2026/01/25 00:17:54  [GET] / [::1]:36132
+2026/01/25 00:17:54  Forwarding to: http://localhost:8083
+2026/01/25 00:17:54   Forwarding: GET http://localhost:8083/
+2026/01/25 00:17:54   Response from http://localhost:8083: 200 (1.05729ms)
+2026/01/25 00:17:54  [GET] / [::1]:36134
+2026/01/25 00:17:54  Forwarding to: http://localhost:8084
+2026/01/25 00:17:54   Forwarding: GET http://localhost:8084/
+2026/01/25 00:17:54   Response from http://localhost:8084: 200 (933.448µs)
+2026/01/25 00:17:54  [GET] / [::1]:36138
+2026/01/25 00:17:54  Forwarding to: http://localhost:8082
+2026/01/25 00:17:54   Forwarding: GET http://localhost:8082/
+2026/01/25 00:17:54   Response from http://localhost:8082: 200 (764.445µs)
+2026/01/25 00:17:55  [GET] / [::1]:36146
+2026/01/25 00:17:55  Forwarding to: http://localhost:8083
+2026/01/25 00:17:55   Forwarding: GET http://localhost:8083/
+2026/01/25 00:17:55   Response from http://localhost:8083: 200 (866.877µs)
+2026/01/25 00:17:55  [GET] / [::1]:36154
+2026/01/25 00:17:55  Forwarding to: http://localhost:8084
+2026/01/25 00:17:55   Forwarding: GET http://localhost:8084/
+2026/01/25 00:17:55   Response from http://localhost:8084: 200 (740.77µs)
+2026/01/25 00:17:55  [GET] / [::1]:36164
+2026/01/25 00:17:55  Forwarding to: http://localhost:8082
+2026/01/25 00:17:55   Forwarding: GET http://localhost:8082/
+2026/01/25 00:17:55   Response from http://localhost:8082: 200 (851.276µs)
+2026/01/25 00:17:56  [GET] / [::1]:36166
+2026/01/25 00:17:56  Forwarding to: http://localhost:8083
+2026/01/25 00:17:56   Forwarding: GET http://localhost:8083/
+2026/01/25 00:17:56   Response from http://localhost:8083: 200 (766.169µs)
+2026/01/25 00:17:56  [GET] / [::1]:36168
+2026/01/25 00:17:56  Forwarding to: http://localhost:8084
+2026/01/25 00:17:56   Forwarding: GET http://localhost:8084/
+2026/01/25 00:17:56   Response from http://localhost:8084: 200 (777.706µs)
+2026/01/25 00:17:56  [GET] / [::1]:36172
+2026/01/25 00:17:56  Forwarding to: http://localhost:8082
+2026/01/25 00:17:56   Forwarding: GET http://localhost:8082/
+2026/01/25 00:17:56   Response from http://localhost:8082: 200 (788.05µs)
+2026/01/25 00:17:58  Checking all backends...
+2026/01/25 00:17:58 Health check complete: 3 backends checked
+2026/01/25 00:18:08  Checking all backends...
+2026/01/25 00:18:08 Health check complete: 3 backends checked
+2026/01/25 00:18:18  Checking all backends...
+2026/01/25 00:18:18 Health check complete: 3 backends checked
+2026/01/25 00:18:28  Checking all backends...
+2026/01/25 00:18:28 Health check complete: 3 backends checked
+2026/01/25 00:18:38  Checking all backends...
+2026/01/25 00:18:38 Health check complete: 3 backends checked
+2026/01/25 00:18:48  Checking all backends...
+2026/01/25 00:18:48 Health check complete: 3 backends checked
+2026/01/25 00:18:58  Checking all backends...
+2026/01/25 00:18:58 Health check complete: 3 backends checked
+2026/01/25 00:19:08  Checking all backends...
+2026/01/25 00:19:08 Health check complete: 3 backends checked
+2026/01/25 00:19:18  Checking all backends...
+2026/01/25 00:19:18 Health check complete: 3 backends checked
+2026/01/25 00:19:28  Checking all backends...
+2026/01/25 00:19:28 Health check complete: 3 backends checked
+2026/01/25 00:19:38  Checking all backends...
+2026/01/25 00:19:38 Health check complete: 3 backends checked
+2026/01/25 00:19:48  Checking all backends...
+2026/01/25 00:19:48 Health check complete: 3 backends checked
+2026/01/25 00:19:58  Checking all backends...
+2026/01/25 00:19:58 Health check complete: 3 backends checked
+2026/01/25 00:20:08  Checking all backends...
+2026/01/25 00:20:08 Health check complete: 3 backends checked
+2026/01/25 00:20:18  Checking all backends...
+2026/01/25 00:20:18 Health check complete: 3 backends checked

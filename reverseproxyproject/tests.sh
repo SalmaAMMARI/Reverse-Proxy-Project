@@ -1,37 +1,95 @@
 #!/bin/bash
 
-echo "=== REVERSE PROXY TEST  ==="
+echo "LOAD BALANCING AND FORWARDING TEST"
+echo "Time: $(date)"
+echo ""
 
-#  Kill old processes
-echo "1. Killing old processes..."
-pkill -f "python.*http.server" 2>/dev/null
+cleanup() {
+    echo "Cleaning up..."
+    kill $PROXY_PID 2>/dev/null
+    pkill -f "python.*server" 2>/dev/null
+    rm -f test*.txt proxy.log server*.py 2>/dev/null
+}
+
+trap cleanup EXIT INT TERM
+
+echo "1. Cleaning existing processes..."
+pkill -f "python.*server" 2>/dev/null
 pkill -f "reverse-proxy" 2>/dev/null
 sleep 2
 
-#  Create test files
-echo "2. Creating test files..."
-echo "this is the server of port 8082" > test82.txt
-echo "this is the server of port 8083" > test83.txt
-echo "this is the server of port 8084" > test84.txt
+echo "2. Creating backend servers that identify themselves..."
 
-#  Start 3 Python backend servers
-echo "3. Starting 3 Python backend servers..."
-python3 -m http.server 8082 > /dev/null 2>&1 &
-python3 -m http.server 8083 > /dev/null 2>&1 &
-python3 -m http.server 8084 > /dev/null 2>&1 &
-echo "   Started backends on ports: 8082, 8083, 8084"
-sleep 3
+cat > server8082.py << 'EOF'
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-#  Test backends directly
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"BACKEND_8082")
+    
+    def log_message(self, *args):
+        pass
+
+HTTPServer(('', 8082), Handler).serve_forever()
+EOF
+
+cat > server8083.py << 'EOF'
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"BACKEND_8083")
+    
+    def log_message(self, *args):
+        pass
+
+HTTPServer(('', 8083), Handler).serve_forever()
+EOF
+
+cat > server8084.py << 'EOF'
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"BACKEND_8084")
+    
+    def log_message(self, *args):
+        pass
+
+HTTPServer(('', 8084), Handler).serve_forever()
+EOF
+
+echo "3. Starting backend servers..."
+python3 server8082.py > /dev/null 2>&1 &
+BACKEND1_PID=$!
+python3 server8083.py > /dev/null 2>&1 &
+BACKEND2_PID=$!
+python3 server8084.py > /dev/null 2>&1 &
+BACKEND3_PID=$!
+echo "Backends started on ports: 8082, 8083, 8084"
+sleep 2
+
 echo "4. Testing backends directly..."
-echo "   8082: $(curl -s http://localhost:8082/test82.txt)"
-echo "   8083: $(curl -s http://localhost:8083/test83.txt)"
-echo "   8084: $(curl -s http://localhost:8084/test84.txt)"
+echo "Port 8082: $(curl -s http://localhost:8082/)"
+echo "Port 8083: $(curl -s http://localhost:8083/)"
+echo "Port 8084: $(curl -s http://localhost:8084/)"
 
-#  Update config
-echo "5. Updating config..."
+echo "5. Configuring proxy..."
+cd /workspaces/Reverse-Proxy-Project/reverseproxyproject
+
 cat > config.json << 'EOF'
 {
+  "port": 8080,
+  "strategy": "round-robin",
   "backends": [
     "http://localhost:8082",
     "http://localhost:8083",
@@ -40,30 +98,84 @@ cat > config.json << 'EOF'
 }
 EOF
 
-#  Build and start proxy
 echo "6. Building proxy..."
 go build -o reverse-proxy main.go
-echo "   Starting proxy..."
+if [ $? -ne 0 ]; then
+    echo "BUILD FAILED"
+    exit 1
+fi
+echo "Build successful"
+
+echo "7. Starting proxy..."
 ./reverse-proxy > proxy.log 2>&1 &
 PROXY_PID=$!
+echo "Proxy started (PID: $PROXY_PID)"
 sleep 5
 
-# Test Admin API
-echo "7. Testing Admin API..."
-echo "   /health: $(curl -s http://localhost:8081/health | head -c 100)"
+echo ""
+echo "8. FORWARDING TEST"
+echo ""
 
-# Test Proxy
-echo "8. Testing Proxy (6 requests)..."
-for i in {1..6}; do
-    resp=$(curl -s http://localhost:8080/test82.txt)
-    echo "   Request $i : $resp"
+echo "Testing single request through proxy..."
+response=$(curl -s http://localhost:8080/)
+echo "Response: $response"
+echo ""
+
+echo "9. LOAD BALANCING TEST"
+echo "Making 12 requests to see distribution..."
+
+declare -A backend_hits
+backend_hits["8082"]=0
+backend_hits["8083"]=0
+backend_hits["8084"]=0
+
+for i in {1..12}; do
+    response=$(curl -s http://localhost:8080/)
+    
+    if [ "$response" = "BACKEND_8082" ]; then
+        backend_hits["8082"]=$((backend_hits["8082"] + 1))
+        echo "Request $i: Backend 8082"
+    elif [ "$response" = "BACKEND_8083" ]; then
+        backend_hits["8083"]=$((backend_hits["8083"] + 1))
+        echo "Request $i: Backend 8083"
+    elif [ "$response" = "BACKEND_8084" ]; then
+        backend_hits["8084"]=$((backend_hits["8084"] + 1))
+        echo "Request $i: Backend 8084"
+    else
+        echo "Request $i: Unknown response: $response"
+    fi
+    
     sleep 0.3
 done
 
-#  Cleanup
-echo "9. Cleaning up..."
-kill $PROXY_PID 2>/dev/null
-pkill -f "python.*http.server" 2>/dev/null
-rm -f test82.txt test83.txt test84.txt proxy.log
+echo ""
+echo "10. LOAD BALANCING RESULTS"
+echo "Backend 8082 hits: ${backend_hits["8082"]}"
+echo "Backend 8083 hits: ${backend_hits["8083"]}"
+echo "Backend 8084 hits: ${backend_hits["8084"]}"
+echo ""
 
-echo "=== DONE ==="
+total_hits=$((backend_hits["8082"] + backend_hits["8083"] + backend_hits["8084"]))
+active_backends=0
+
+for backend in 8082 8083 8084; do
+    if [ ${backend_hits[$backend]} -gt 0 ]; then
+        active_backends=$((active_backends + 1))
+    fi
+done
+
+echo "Total requests: $total_hits"
+echo "Active backends: $active_backends/3"
+
+if [ $active_backends -ge 2 ]; then
+    echo "LOAD BALANCING: WORKING (multiple backends used)"
+else
+    echo "LOAD BALANCING: NOT WORKING (only one backend used)"
+fi
+
+echo ""
+echo "Proxy running on: http://localhost:8080"
+echo "Admin API on: http://localhost:8081"
+echo "Press Ctrl+C to stop"
+
+wait $PROXY_PID

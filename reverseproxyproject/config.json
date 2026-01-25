@@ -1,4 +1,6 @@
 {
+  "port": 8080,
+  "strategy": "round-robin",
   "backends": [
     "http://localhost:8082",
     "http://localhost:8083",

@@ -10,7 +10,6 @@ import (
 	"net/http/httputil"
 	"time"
 	"reverseproxyproject/Config"
-	"reverseproxyproject/internal/models"
 )
 
 // ProxyHandler handles incoming HTTP requests and forwards them to backends
@@ -27,8 +26,7 @@ func NewProxyHandler(balancer *RoundRobinBalancer, cfg *config.Config) *ProxyHan
 }
 
 // StartProxyServer starts the main proxy server
-func StartProxyServer(cfg *config.Config, pool *models.ServerPool) {
-	balancer := NewRoundRobinBalancer(pool)
+func StartProxyServer(cfg *config.Config, balancer *RoundRobinBalancer) {
 	handler := NewProxyHandler(balancer, cfg)
 	
 	server := &http.Server{
@@ -41,7 +39,7 @@ func StartProxyServer(cfg *config.Config, pool *models.ServerPool) {
 	
 	log.Printf(" Reverse Proxy starting on :%d", cfg.Port)
 	log.Printf("Strategy: %s", cfg.Strategy)
-	log.Printf(" Backends: %d", len(pool.Backends))
+	log.Printf(" Backends: %d", len(balancer.GetPool().GetBackends()))
 	log.Println("Ready to forward requests!")
 	log.Println("------------------------------------------")
 	
@@ -79,7 +77,11 @@ func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		
 		req.Header.Set("X-Forwarded-For", r.RemoteAddr)
 		req.Header.Set("X-Forwarded-Host", r.Host)
-		req.Header.Set("X-Forwarded-Proto", r.URL.Scheme)
+		scheme := r.URL.Scheme
+		if scheme == "" {
+			scheme = "http"
+		}
+		req.Header.Set("X-Forwarded-Proto", scheme)
 		req.Header.Set("X-Proxy-Server", "Go-Reverse-Proxy")
 		
 		log.Printf("  Forwarding: %s %s", req.Method, req.URL.String())
