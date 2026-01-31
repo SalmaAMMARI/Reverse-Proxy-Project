@@ -6,43 +6,59 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"reverseproxyproject/Config"
 	"reverseproxyproject/internal/models"
-	"reverseproxyproject/internal/Proxy"
+	proxy "reverseproxyproject/internal/Proxy"
 )
 
 // AdminAPI handles the administrative interface
 type AdminAPI struct {
-	balancer      *proxy.RoundRobinBalancer
-	healthChecker *proxy.HealthChecker
-	port          int
+	balancer       proxy.LoadBalancerInterface
+	healthChecker  *proxy.HealthChecker
+	sessionManager *proxy.SessionManager
+	config         *config.Config
+	port           int
 }
 
-func NewAdminAPI(balancer *proxy.RoundRobinBalancer, healthChecker *proxy.HealthChecker, port int) *AdminAPI {
+func NewAdminAPI(balancer proxy.LoadBalancerInterface, healthChecker *proxy.HealthChecker, cfg *config.Config, port int) *AdminAPI {
 	return &AdminAPI{
 		balancer:      balancer,
 		healthChecker: healthChecker,
+		config:        cfg,
 		port:          port,
 	}
 }
 
 // Start begins the Admin API server
 func (api *AdminAPI) Start() {
-	//  routes
+	// Register routes
 	http.HandleFunc("/", api.handleRoot)
 	http.HandleFunc("/status", api.handleStatus)
 	http.HandleFunc("/health", api.handleHealth)
 	http.HandleFunc("/backends", api.handleBackends)
+	http.HandleFunc("/config", api.handleConfig)
+	http.HandleFunc("/sessions", api.handleSessions)
 
 	addr := fmt.Sprintf(":%d", api.port)
 	log.Printf("Admin API starting on port %d", api.port)
 	log.Printf("Endpoints:")
-	log.Printf("GET  %s/status", addr)
-	log.Printf("GET  %s/health", addr)
-	log.Printf("POST %s/backends - Add backend", addr)
+	log.Printf("GET    %s/status", addr)
+	log.Printf("GET    %s/health", addr)
+	log.Printf("POST   %s/backends - Add backend", addr)
 	log.Printf("DELETE %s/backends - Remove backend", addr)
+	log.Printf("GET    %s/config - Get configuration", addr)
+	log.Printf("GET    %s/sessions - Get session stats (if sticky sessions enabled)", addr)
 
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatal("Failed to start Admin API:", err)
+	// Start server with or without HTTPS
+	if api.config != nil && api.config.EnableHTTPS && api.config.CertFile != "" && api.config.KeyFile != "" {
+		log.Printf("Admin API using HTTPS")
+		if err := http.ListenAndServeTLS(addr, api.config.CertFile, api.config.KeyFile, nil); err != nil {
+			log.Fatal("Failed to start Admin API (HTTPS):", err)
+		}
+	} else {
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			log.Fatal("Failed to start Admin API:", err)
+		}
 	}
 }
 
@@ -59,8 +75,14 @@ func (api *AdminAPI) handleRoot(w http.ResponseWriter, r *http.Request) {
 			"GET /health":    "Get health checker status",
 			"POST /backends": "Add a new backend (JSON: {\"url\": \"http://...\"})",
 			"DELETE /backends": "Remove a backend (JSON: {\"url\": \"http://...\"})",
+			"GET /config":    "Get current configuration",
+			"GET /sessions":  "Get session statistics (if sticky sessions enabled)",
 		},
 		"documentation": "Reverse Proxy Admin API",
+		"features": map[string]interface{}{
+			"sticky_sessions": api.config != nil && api.config.StickySessions,
+			"https_enabled":   api.config != nil && api.config.EnableHTTPS,
+		},
 	}
 
 	json.NewEncoder(w).Encode(endpoints)
@@ -108,10 +130,61 @@ func (api *AdminAPI) handleBackends(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleConfig returns current configuration
+func (api *AdminAPI) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if api.config == nil {
+		http.Error(w, `{"error": "Configuration not available"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Create a safe copy without sensitive data if needed
+	configCopy := map[string]interface{}{
+		"port":            api.config.Port,
+		"strategy":        api.config.Strategy,
+		"sticky_sessions": api.config.StickySessions,
+		"enable_https":    api.config.EnableHTTPS,
+		"backends":        api.config.Backends,
+		"backend_weights": api.config.BackendWeights,
+	}
+
+	json.NewEncoder(w).Encode(configCopy)
+}
+
+// handleSessions returns session statistics
+func (api *AdminAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if api.config == nil || !api.config.StickySessions {
+		http.Error(w, `{"error": "Sticky sessions not enabled"}`, http.StatusBadRequest)
+		return
+	}
+
+	var sessionStats map[string]interface{}
+	if api.sessionManager != nil {
+		sessionStats = api.sessionManager.GetStats()
+	} else {
+		sessionStats = map[string]interface{}{
+			"message": "Session manager not initialized",
+			"enabled": false,
+		}
+	}
+
+	json.NewEncoder(w).Encode(sessionStats)
+}
+
 // addBackend adds a new backend to the pool
 func (api *AdminAPI) addBackend(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		URL string `json:"url"`
+		URL    string `json:"url"`
+		Weight int    `json:"weight,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -132,7 +205,12 @@ func (api *AdminAPI) addBackend(w http.ResponseWriter, r *http.Request) {
 
 	backend := &models.Backend{
 		URL:   parsedURL,
-		Alive: true, 
+		Alive: true,
+	}
+
+	// Set weight if provided
+	if request.Weight > 0 {
+		backend.SetWeight(request.Weight)
 	}
 
 	api.balancer.AddBackend(backend)
@@ -140,8 +218,9 @@ func (api *AdminAPI) addBackend(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"message": "Backend added successfully",
 		"backend": map[string]interface{}{
-			"url":   backend.URL.String(),
-			"alive": backend.IsAlive(),
+			"url":    backend.URL.String(),
+			"alive":  backend.IsAlive(),
+			"weight": backend.GetWeight(),
 		},
 		"total_backends": api.balancer.GetStatus()["total_backends"],
 	}
@@ -174,10 +253,15 @@ func (api *AdminAPI) removeBackend(w http.ResponseWriter, r *http.Request) {
 	statusBefore := api.balancer.GetStatus()
 	totalBefore := statusBefore["total_backends"].(int)
 
-	removed := api.balancer.RemoveBackend(parsedURL)
-
-	if !removed {
-		http.Error(w, `{"error": "Backend not found"}`, http.StatusNotFound)
+	// Use the balancer's RemoveBackend method
+	if rrBalancer, ok := api.balancer.(interface{ RemoveBackend(*url.URL) bool }); ok {
+		removed := rrBalancer.RemoveBackend(parsedURL)
+		if !removed {
+			http.Error(w, `{"error": "Backend not found"}`, http.StatusNotFound)
+			return
+		}
+	} else {
+		http.Error(w, `{"error": "RemoveBackend method not available"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -190,4 +274,3 @@ func (api *AdminAPI) removeBackend(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
-

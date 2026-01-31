@@ -1,9 +1,18 @@
 {
   "port": 8080,
-  "strategy": "round-robin",
+  "strategy": "weighted",
+  "sticky_sessions": true,
+  "enable_https": false,
+  "cert_file": "cert.pem",
+  "key_file": "key.pem",
   "backends": [
     "http://localhost:8082",
     "http://localhost:8083",
     "http://localhost:8084"
-  ]
+  ],
+  "backend_weights": {
+    "http://localhost:8082": 3,
+    "http://localhost:8083": 2,
+    "http://localhost:8084": 1
+  }
 }

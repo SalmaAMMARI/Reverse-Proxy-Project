@@ -28,15 +28,33 @@ func main() {
 			log.Printf("Invalid backend URL %s: %v", backendURLStr, err)
 			continue
 		}
+		
 		backend := &models.Backend{
 			URL:   parsedURL,
 			Alive: true,
 		}
+		
+		// Apply weight if configured
+		if cfg.BackendWeights != nil {
+			if weight, exists := cfg.BackendWeights[backendURLStr]; exists {
+				backend.SetWeight(weight)
+			}
+		}
+		
 		pool.AddBackend(backend)
 	}
 
-	// Create load balancer
-	balancer := proxy.NewRoundRobinBalancer(pool)
+	// Create appropriate load balancer based on strategy
+	var balancer proxy.LoadBalancerInterface
+	
+	switch cfg.Strategy {
+	case "weighted", "weighted-round-robin":
+		log.Printf("Using weighted round-robin load balancer")
+		balancer = proxy.NewWeightedRoundRobinBalancer(pool)
+	default:
+		log.Printf("Using round-robin load balancer")
+		balancer = proxy.NewRoundRobinBalancer(pool)
+	}
 
 	// Create and start health checker
 	healthChecker := proxy.NewHealthChecker(balancer, 10*time.Second)
@@ -46,6 +64,6 @@ func main() {
 	go proxy.StartProxyServer(cfg, balancer)
 
 	// Create and start admin API
-	adminAPI := admin.NewAdminAPI(balancer, healthChecker, 8081)
-	adminAPI.Start() 
+	adminAPI := admin.NewAdminAPI(balancer, healthChecker, cfg, 8081)
+	adminAPI.Start()
 }

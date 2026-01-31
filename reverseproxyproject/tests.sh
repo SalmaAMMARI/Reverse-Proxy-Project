@@ -1,181 +1,71 @@
-#!/bin/bash
-
-echo "LOAD BALANCING AND FORWARDING TEST"
-echo "Time: $(date)"
 echo ""
+echo "11. TESTING STICKY SESSIONS"
+echo "Making 5 requests with same session..."
+session_backends=()
+for i in {1..5}; do
+    # Use curl with cookie jar
+    response=$(curl -s -c cookies.txt -b cookies.txt http://localhost:8080/)
+    echo "Request $i: $response"
+    session_backends+=("$response")
+done
 
-cleanup() {
-    echo "Cleaning up..."
-    kill $PROXY_PID 2>/dev/null
-    pkill -f "python.*server" 2>/dev/null
-    rm -f test*.txt proxy.log server*.py 2>/dev/null
-}
-
-trap cleanup EXIT INT TERM
-
-echo "1. Cleaning existing processes..."
-pkill -f "python.*server" 2>/dev/null
-pkill -f "reverse-proxy" 2>/dev/null
-sleep 2
-
-echo "2. Creating backend servers that identify themselves..."
-
-cat > server8082.py << 'EOF'
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"BACKEND_8082")
-    
-    def log_message(self, *args):
-        pass
-
-HTTPServer(('', 8082), Handler).serve_forever()
-EOF
-
-cat > server8083.py << 'EOF'
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"BACKEND_8083")
-    
-    def log_message(self, *args):
-        pass
-
-HTTPServer(('', 8083), Handler).serve_forever()
-EOF
-
-cat > server8084.py << 'EOF'
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"BACKEND_8084")
-    
-    def log_message(self, *args):
-        pass
-
-HTTPServer(('', 8084), Handler).serve_forever()
-EOF
-
-echo "3. Starting backend servers..."
-python3 server8082.py > /dev/null 2>&1 &
-BACKEND1_PID=$!
-python3 server8083.py > /dev/null 2>&1 &
-BACKEND2_PID=$!
-python3 server8084.py > /dev/null 2>&1 &
-BACKEND3_PID=$!
-echo "Backends started on ports: 8082, 8083, 8084"
-sleep 2
-
-echo "4. Testing backends directly..."
-echo "Port 8082: $(curl -s http://localhost:8082/)"
-echo "Port 8083: $(curl -s http://localhost:8083/)"
-echo "Port 8084: $(curl -s http://localhost:8084/)"
-
-echo "5. Configuring proxy..."
-cd /workspaces/Reverse-Proxy-Project/reverseproxyproject
-
-cat > config.json << 'EOF'
-{
-  "port": 8080,
-  "strategy": "round-robin",
-  "backends": [
-    "http://localhost:8082",
-    "http://localhost:8083",
-    "http://localhost:8084"
-  ]
-}
-EOF
-
-echo "6. Building proxy..."
-go build -o reverse-proxy main.go
-if [ $? -ne 0 ]; then
-    echo "BUILD FAILED"
-    exit 1
+# Check if all requests went to same backend
+if [ "${session_backends[0]}" = "${session_backends[1]}" ] && \
+   [ "${session_backends[1]}" = "${session_backends[2]}" ]; then
+    echo "STICKY SESSIONS: WORKING"
+else
+    echo "STICKY SESSIONS: NOT WORKING"
 fi
-echo "Build successful"
-
-echo "7. Starting proxy..."
-./reverse-proxy > proxy.log 2>&1 &
-PROXY_PID=$!
-echo "Proxy started (PID: $PROXY_PID)"
-sleep 5
 
 echo ""
-echo "8. FORWARDING TEST"
-echo ""
+echo "12. TESTING WEIGHTED LOAD BALANCING"
+echo "Making 30 requests to see weight distribution..."
 
-echo "Testing single request through proxy..."
-response=$(curl -s http://localhost:8080/)
-echo "Response: $response"
-echo ""
+declare -A weighted_hits
+weighted_hits["8082"]=0
+weighted_hits["8083"]=0
+weighted_hits["8084"]=0
 
-echo "9. LOAD BALANCING TEST"
-echo "Making 12 requests to see distribution..."
-
-declare -A backend_hits
-backend_hits["8082"]=0
-backend_hits["8083"]=0
-backend_hits["8084"]=0
-
-for i in {1..12}; do
+for i in {1..30}; do
     response=$(curl -s http://localhost:8080/)
     
     if [ "$response" = "BACKEND_8082" ]; then
-        backend_hits["8082"]=$((backend_hits["8082"] + 1))
-        echo "Request $i: Backend 8082"
+        weighted_hits["8082"]=$((weighted_hits["8082"] + 1))
     elif [ "$response" = "BACKEND_8083" ]; then
-        backend_hits["8083"]=$((backend_hits["8083"] + 1))
-        echo "Request $i: Backend 8083"
+        weighted_hits["8083"]=$((weighted_hits["8083"] + 1))
     elif [ "$response" = "BACKEND_8084" ]; then
-        backend_hits["8084"]=$((backend_hits["8084"] + 1))
-        echo "Request $i: Backend 8084"
-    else
-        echo "Request $i: Unknown response: $response"
+        weighted_hits["8084"]=$((weighted_hits["8084"] + 1))
     fi
     
-    sleep 0.3
+    sleep 0.1
 done
 
 echo ""
-echo "10. LOAD BALANCING RESULTS"
-echo "Backend 8082 hits: ${backend_hits["8082"]}"
-echo "Backend 8083 hits: ${backend_hits["8083"]}"
-echo "Backend 8084 hits: ${backend_hits["8084"]}"
-echo ""
+echo "WEIGHTED LOAD BALANCING RESULTS (expected ratio 3:2:1):"
+echo "Backend 8082 (weight 3): ${weighted_hits["8082"]} hits"
+echo "Backend 8083 (weight 2): ${weighted_hits["8083"]} hits"
+echo "Backend 8084 (weight 1): ${weighted_hits["8084"]} hits"
 
-total_hits=$((backend_hits["8082"] + backend_hits["8083"] + backend_hits["8084"]))
-active_backends=0
-
-for backend in 8082 8083 8084; do
-    if [ ${backend_hits[$backend]} -gt 0 ]; then
-        active_backends=$((active_backends + 1))
-    fi
-done
-
-echo "Total requests: $total_hits"
-echo "Active backends: $active_backends/3"
-
-if [ $active_backends -ge 2 ]; then
-    echo "LOAD BALANCING: WORKING (multiple backends used)"
-else
-    echo "LOAD BALANCING: NOT WORKING (only one backend used)"
+# Calculate ratios
+total_weighted=$((weighted_hits["8082"] + weighted_hits["8083"] + weighted_hits["8084"]))
+if [ $total_weighted -gt 0 ]; then
+    ratio_8082=$((weighted_hits["8082"] * 100 / total_weighted))
+    ratio_8083=$((weighted_hits["8083"] * 100 / total_weighted))
+    ratio_8084=$((weighted_hits["8084"] * 100 / total_weighted))
+    echo "Percentages: 8082: ${ratio_8082}%, 8083: ${ratio_8083}%, 8084: ${ratio_8084}%"
 fi
 
 echo ""
-echo "Proxy running on: http://localhost:8080"
-echo "Admin API on: http://localhost:8081"
-echo "Press Ctrl+C to stop"
+echo "13. TESTING ADMIN API ENDPOINTS"
+echo "GET /status:"
+curl -s http://localhost:8081/status | jq '. | {total_backends, alive_backends, strategy}' 2>/dev/null || curl -s http://localhost:8081/status | head -50
 
-wait $PROXY_PID
+echo ""
+echo "GET /config:"
+curl -s http://localhost:8081/config | jq '.' 2>/dev/null || curl -s http://localhost:8081/config | head -50
+
+if curl -s http://localhost:8081/sessions 2>/dev/null | grep -q "sticky sessions"; then
+    echo ""
+    echo "GET /sessions (if enabled):"
+    curl -s http://localhost:8081/sessions | jq '.' 2>/dev/null || curl -s http://localhost:8081/sessions | head -30
+fi

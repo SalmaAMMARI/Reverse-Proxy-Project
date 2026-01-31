@@ -6,58 +6,73 @@ import (
 	"net/url"
 	"sync/atomic"
 	"time"
-	"reverseproxyproject/internal/models" 
+	"reverseproxyproject/internal/models"
 )
+
+// Backend extends models.Backend for proxy package
+type Backend struct {
+	*models.Backend
+}
+
+// ServerPool extends models.ServerPool for proxy package
+type ServerPool struct {
+	*models.ServerPool
+}
 
 // RoundRobinBalancer implements the LoadBalancer interface with round-robin strategy
 type RoundRobinBalancer struct {
-	pool *models.ServerPool
+	pool *ServerPool
 }
 
 // NewRoundRobinBalancer creates a new round-robin load balancer
 func NewRoundRobinBalancer(pool *models.ServerPool) *RoundRobinBalancer {
 	return &RoundRobinBalancer{
-		pool: pool,
+		pool: &ServerPool{pool},
 	}
 }
-func (rr *RoundRobinBalancer) GetPool() *models.ServerPool {
+
+// GetPool returns the server pool
+func (rr *RoundRobinBalancer) GetPool() *ServerPool {
 	return rr.pool
 }
+
+// RemoveBackend removes a backend from the pool
 func (rr *RoundRobinBalancer) RemoveBackend(backendUrl *url.URL) bool {
-    return  rr.pool.RemoveBackend(backendUrl)
-	
+	return rr.pool.RemoveBackend(backendUrl)
 }
 
 // GetNextValidPeer returns the next alive backend using round-robin algorithm
-func (rr *RoundRobinBalancer) GetNextValidPeer() *models.Backend {
-	// Get a snapshot of all backends (the whole pool)
-	backends := rr.pool.GetBackends()
+func (rr *RoundRobinBalancer) GetNextValidPeer() *Backend {
+	// Get a snapshot of all backends
+	modelsBackends := rr.pool.GetBackends()
+	backends := make([]*Backend, len(modelsBackends))
+	for i, b := range modelsBackends {
+		backends[i] = &Backend{b}
+	}
 	
 	if len(backends) == 0 {
-		return nil 
+		return nil
 	}
 
-	// finding  an alive backend
+	// Find an alive backend
 	attempts := 0
 	totalBackends := len(backends)
 	
 	for attempts < totalBackends {
-		
+		// Atomically increment and get the current index
 		currentIndex := atomic.AddUint64(&rr.pool.Current, 1)
 		
 		// Calculate which backend to use
-		// Using modulo (%) to wrap around when we reach the end
 		backendIndex := int((currentIndex - 1) % uint64(totalBackends))
-		
 		
 		backend := backends[backendIndex]
 		
-		//  Check if the backend is alive
+		// Check if the backend is alive
 		if backend.IsAlive() {
-			return backend 
+			return backend
 		}
 		
-		// If not alive try next one
+		// If not alive, try next one
 		attempts++
 	}
 
@@ -71,10 +86,16 @@ func (rr *RoundRobinBalancer) AddBackend(backend *models.Backend) {
 }
 
 // SetBackendStatus updates the health status of a backend
-func (rr *RoundRobinBalancer) SetBackendStatus(backendURL *url.URL, alive bool) {
-	backend := rr.pool.GetBackendByURL(backendURL)
+func (rr *RoundRobinBalancer) SetBackendStatus(backendURL string, alive bool) {
+	parsedURL, err := url.Parse(backendURL)
+	if err != nil {
+		fmt.Printf("Invalid URL: %s\n", backendURL)
+		return
+	}
+	
+	backend := rr.pool.GetBackendByURL(parsedURL)
 	if backend == nil {
-		fmt.Printf("Cannot update status: backend %s not found\n", backendURL.String())
+		fmt.Printf("Cannot update status: backend %s not found\n", backendURL)
 		return
 	}
 	
@@ -83,23 +104,22 @@ func (rr *RoundRobinBalancer) SetBackendStatus(backendURL *url.URL, alive bool) 
 	
 	if oldStatus != alive {
 		if alive {
-			fmt.Printf("Backend %s is now ALIVE\n", backendURL.String())
+			fmt.Printf("Backend %s is now ALIVE\n", backendURL)
 		} else {
-			fmt.Printf("Backend %s is now DEAD!!\n", backendURL.String())
+			fmt.Printf("Backend %s is now DEAD!!\n", backendURL)
 		}
 	}
 }
 
-
 // HealthCheck performs a health check on a single backend
-func (rr *RoundRobinBalancer) HealthCheck(backend *models.Backend) {
+func (rr *RoundRobinBalancer) HealthCheck(backend *Backend) {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
 	
-	healthURL := backend.URL.String() + "/health" // check the health endpoint
+	healthURL := backend.URL.String() + "/health"
 	if backend.URL.Path == "" {
-		healthURL = backend.URL.String() + "/" // Just check if server responds
+		healthURL = backend.URL.String() + "/"
 	}
 	
 	resp, err := client.Get(healthURL)
@@ -110,14 +130,16 @@ func (rr *RoundRobinBalancer) HealthCheck(backend *models.Backend) {
 		resp.Body.Close()
 	}
 	
-	
-	rr.SetBackendStatus(backend.URL, isAlive)
+	rr.SetBackendStatus(backend.URL.String(), isAlive)
 }
-
 
 // GetStatus returns current load balancer status for monitoring
 func (rr *RoundRobinBalancer) GetStatus() map[string]interface{} {
-	backends := rr.pool.GetBackends()
+	modelsBackends := rr.pool.GetBackends()
+	backends := make([]*Backend, len(modelsBackends))
+	for i, b := range modelsBackends {
+		backends[i] = &Backend{b}
+	}
 	
 	backendStatus := make([]map[string]interface{}, len(backends))
 	for i, backend := range backends {
@@ -125,6 +147,7 @@ func (rr *RoundRobinBalancer) GetStatus() map[string]interface{} {
 			"url":                  backend.URL.String(),
 			"alive":                backend.IsAlive(),
 			"current_connections":  backend.GetConnections(),
+			"weight":               backend.GetWeight(),
 		}
 	}
 	
