@@ -1,0 +1,32 @@
+# Reverse Proxy Configuration
+proxy_port: 8000
+admin_port: 8081
+
+# Health Check Settings
+health_check_interval: 30s
+health_check_timeout: 5s
+
+# Request Settings
+request_timeout: 15s
+rate_limit: 100  # requests per second
+load_balancing_strategy: "round-robin"  # or "least-connections"
+
+# TLS Configuration (optional)
+tls:
+  enabled: false
+  cert_file: "cert.pem"
+  key_file: "key.pem"
+
+# Initial Backend Servers
+backends:
+  - url: "http://localhost:8080"
+    health_check_path: "/health"
+    weight: 1
+  
+  - url: "http://localhost:8081"
+    health_check_path: "/ping"
+    weight: 2
+  
+  - url: "http://localhost:8082"
+    health_check_path: "/status"
+    weight: 1
